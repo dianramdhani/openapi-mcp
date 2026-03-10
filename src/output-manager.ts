@@ -1,5 +1,5 @@
 import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'fs';
-import { dirname } from 'path';
+import { dirname, resolve, join } from 'path';
 
 export interface OpenApiMcpConfig {
   typesOutputDir: string;
@@ -14,6 +14,7 @@ export interface DuplicateTypeInfo {
 
 export class OutputManager {
   private config: OpenApiMcpConfig;
+  private configDir: string; // Directory where config file is located
   private definedTypes = new Map<string, string>(); // typeName -> featureName where it's defined
   private duplicates: DuplicateTypeInfo[] = [];
   private neededImports = new Map<string, string[]>(); // featureName -> [types needed from other files]
@@ -21,6 +22,16 @@ export class OutputManager {
   constructor(configPath: string) {
     const configContent = readFileSync(configPath, 'utf-8');
     this.config = JSON.parse(configContent);
+    // Resolve all paths relative to config file directory
+    this.configDir = dirname(configPath);
+    
+    // Convert relative paths to absolute paths based on config directory
+    if (!this.config.typesOutputDir.startsWith('/')) {
+      this.config.typesOutputDir = resolve(this.configDir, this.config.typesOutputDir);
+    }
+    if (!this.config.servicesOutputDir.startsWith('/')) {
+      this.config.servicesOutputDir = resolve(this.configDir, this.config.servicesOutputDir);
+    }
   }
 
   getConfig(): OpenApiMcpConfig {
