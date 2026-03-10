@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "openapi": {
+      "command": "node",
+      "args": ["/data/data/com.termux/files/home/belajar-mcp/openapi-mcp/dist/index.js"],
+      "cwd": "/data/data/com.termux/files/home/belajar-mcp/openapi-mcp"
+    }
+  }
+}

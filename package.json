@@ -1,0 +1,23 @@
+{
+  "name": "openapi-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for generating TypeScript code from OpenAPI specs",
+  "main": "./dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "node --loader ts-node/esm src/index.ts",
+    "test": "npm run build && node dist/test-generate.js ../report.json",
+    "test:tsc": "npm run build && node dist/test-generate.js ../report.json && npx tsc -p tsconfig.test.json --noEmit",
+    "test:skip-tsc": "npm run build && node dist/test-generate.js ../report.json --skip-tsc"
+  },
+  "keywords": ["mcp", "openapi", "typescript", "codegen"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@types/node": "^25.4.0",
+    "typescript": "^5.9.3"
+  }
+}
