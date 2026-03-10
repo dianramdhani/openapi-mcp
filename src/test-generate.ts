@@ -20,15 +20,18 @@ console.log('---');
 try {
   const parser = new OpenAPIParser(specPath);
   const outputManager = new OutputManager(configPath);
-  const config = outputManager.getConfig();
+  
+  // Get output directories (uses config if exists, otherwise default)
+  const typesOutputDir = outputManager.getTypesOutputDir();
+  const servicesOutputDir = outputManager.getServicesOutputDir();
 
   console.log(`\nOutput directories:`);
-  console.log(`  Types: ${config.typesOutputDir}`);
-  console.log(`  Services: ${config.servicesOutputDir}`);
+  console.log(`  Types: ${typesOutputDir}`);
+  console.log(`  Services: ${servicesOutputDir}`);
   
   // Create output directories
-  mkdirSync(config.typesOutputDir, { recursive: true });
-  mkdirSync(config.servicesOutputDir, { recursive: true });
+  mkdirSync(typesOutputDir, { recursive: true });
+  mkdirSync(servicesOutputDir, { recursive: true });
 
   // Get all tags or filter by tag
   const tags = testTag ? [testTag] : parser.getAllTags().map((t) => t.name);
@@ -82,8 +85,8 @@ try {
     const services = serviceGenerator.generateService(tagName, operations);
 
     // Write files
-    const typesPath = `${config.typesOutputDir}/${featureName}.types.ts`;
-    const servicesPath = `${config.servicesOutputDir}/${featureName}.services.ts`;
+    const typesPath = `${typesOutputDir}/${featureName}.types.ts`;
+    const servicesPath = `${servicesOutputDir}/${featureName}.services.ts`;
 
     // Add missing imports for referenced types
     const typesWithImports = outputManager.addMissingImports(featureName, deduplicatedTypes);
@@ -102,7 +105,7 @@ try {
   console.log('\n=== Generating common.types.ts ===');
   const commonTypes = outputManager.generateCommonTypes();
   if (commonTypes) {
-    const commonTypesPath = `${config.typesOutputDir}/common.types.ts`;
+    const commonTypesPath = `${typesOutputDir}/common.types.ts`;
     outputManager.writeFile(commonTypesPath, commonTypes);
     console.log(`  ✓ ${commonTypesPath}`);
     typesFiles.unshift('common.types.ts'); // Add common.types first
@@ -113,8 +116,8 @@ try {
   // Generate index.ts files
   console.log('\n=== Generating index.ts files ===');
 
-  const typesIndexPath = `${config.typesOutputDir}/index.ts`;
-  const servicesIndexPath = `${config.servicesOutputDir}/index.ts`;
+  const typesIndexPath = `${typesOutputDir}/index.ts`;
+  const servicesIndexPath = `${servicesOutputDir}/index.ts`;
 
   const typesIndex = outputManager.generateTypesIndex(typesFiles);
   const servicesIndex = outputManager.generateServicesIndex(servicesFiles);

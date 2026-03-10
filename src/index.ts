@@ -236,7 +236,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const parser = new OpenAPIParser(specPath);
         const spec = parser.getSpec();
         const outputManager = new OutputManager(configPath || './openapi-mcp.config.json');
-        const config = outputManager.getConfig();
+        
+        // Get output directories (uses config if exists, otherwise default)
+        const typesOutputDir = outputManager.getTypesOutputDir();
+        const servicesOutputDir = outputManager.getServicesOutputDir();
 
         const tagsToGenerate = tag ? [tag] : parser.getAllTags().map((t) => t.name);
 
@@ -272,8 +275,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           const serviceGenerator = new ServiceGenerator();
           const services = serviceGenerator.generateService(tagName, operations);
 
-          const typesPath = `${config.typesOutputDir}/${featureName}.types.ts`;
-          const servicesPath = `${config.servicesOutputDir}/${featureName}.services.ts`;
+          const typesPath = `${typesOutputDir}/${featureName}.types.ts`;
+          const servicesPath = `${servicesOutputDir}/${featureName}.services.ts`;
 
           outputManager.writeFile(typesPath, deduplicatedTypes);
           outputManager.writeFile(servicesPath, services);
@@ -286,15 +289,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const typesIndex = outputManager.generateTypesIndex(typesFiles);
         const servicesIndex = outputManager.generateServicesIndex(servicesFiles);
 
-        const typesIndexPath = `${config.typesOutputDir}/index.ts`;
-        const servicesIndexPath = `${config.servicesOutputDir}/index.ts`;
+        const typesIndexPath = `${typesOutputDir}/index.ts`;
+        const servicesIndexPath = `${servicesOutputDir}/index.ts`;
 
         outputManager.writeFile(typesIndexPath, typesIndex);
         outputManager.writeFile(servicesIndexPath, servicesIndex);
 
         output.push(
-          `✓ Generated ${typesFiles.length} types files in ${config.typesOutputDir}`,
-          `✓ Generated ${servicesFiles.length} services files in ${config.servicesOutputDir}`,
+          `✓ Generated ${typesFiles.length} types files in ${typesOutputDir}`,
+          `✓ Generated ${servicesFiles.length} services files in ${servicesOutputDir}`,
           `✓ Generated index.ts files`,
           '',
           outputManager.getDuplicatesReport()

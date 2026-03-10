@@ -13,29 +13,58 @@ export interface DuplicateTypeInfo {
 }
 
 export class OutputManager {
-  private config: OpenApiMcpConfig;
+  private config: OpenApiMcpConfig | null;
   private configDir: string; // Directory where config file is located
   private definedTypes = new Map<string, string>(); // typeName -> featureName where it's defined
   private duplicates: DuplicateTypeInfo[] = [];
   private neededImports = new Map<string, string[]>(); // featureName -> [types needed from other files]
 
   constructor(configPath: string) {
-    const configContent = readFileSync(configPath, 'utf-8');
-    this.config = JSON.parse(configContent);
-    // Resolve all paths relative to config file directory
-    this.configDir = dirname(configPath);
-    
-    // Convert relative paths to absolute paths based on config directory
-    if (!this.config.typesOutputDir.startsWith('/')) {
-      this.config.typesOutputDir = resolve(this.configDir, this.config.typesOutputDir);
-    }
-    if (!this.config.servicesOutputDir.startsWith('/')) {
-      this.config.servicesOutputDir = resolve(this.configDir, this.config.servicesOutputDir);
+    // Check if config file exists
+    if (existsSync(configPath)) {
+      const configContent = readFileSync(configPath, 'utf-8');
+      this.config = JSON.parse(configContent);
+      // Resolve all paths relative to config file directory
+      this.configDir = dirname(configPath);
+
+      // Convert relative paths to absolute paths based on config directory
+      if (this.config && !this.config.typesOutputDir.startsWith('/')) {
+        this.config.typesOutputDir = resolve(this.configDir, this.config.typesOutputDir);
+      }
+      if (this.config && !this.config.servicesOutputDir.startsWith('/')) {
+        this.config.servicesOutputDir = resolve(this.configDir, this.config.servicesOutputDir);
+      }
+    } else {
+      // No config file - use feature-based structure (types/ and services/ in current dir)
+      this.config = null;
+      this.configDir = process.cwd();
     }
   }
 
-  getConfig(): OpenApiMcpConfig {
+  getConfig(): OpenApiMcpConfig | null {
     return this.config;
+  }
+
+  /**
+   * Get output directory for types
+   * If no config, returns default types/ directory
+   */
+  getTypesOutputDir(): string {
+    if (this.config) {
+      return this.config.typesOutputDir;
+    }
+    return resolve(this.configDir, 'types');
+  }
+
+  /**
+   * Get output directory for services
+   * If no config, returns default services/ directory
+   */
+  getServicesOutputDir(): string {
+    if (this.config) {
+      return this.config.servicesOutputDir;
+    }
+    return resolve(this.configDir, 'services');
   }
 
   /**
