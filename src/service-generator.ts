@@ -137,11 +137,72 @@ ${methods.join(',\n')}
       axiosCall = `axiosInstance.${method.toLowerCase()}(\`${urlPath}\`, ${axiosParamsStr})`;
     }
 
-    const code = `  ${functionName}: async (${paramsStr}): Promise<${responseTypeName}> => {
+    // Generate JSDoc
+    const jsdoc = this.generateJSDoc(operation, path, method, params, responseTypeName);
+
+    const code = `${jsdoc}  ${functionName}: async (${paramsStr}): Promise<${responseTypeName}> => {
     const { data } = await ${axiosCall};
     return data;
   }`;
 
     return { code, imports };
+  }
+
+  /**
+   * Generate JSDoc comment for operation
+   */
+  private generateJSDoc(
+    operation: OperationObject,
+    path: string,
+    method: string,
+    params: string[],
+    responseTypeName: string
+  ): string {
+    const lines: string[] = [];
+    
+    // Summary
+    if (operation.summary) {
+      lines.push(` * ${operation.summary}`);
+    } else if (operation.operationId) {
+      // Convert operationId to readable format
+      const readableOpId = operation.operationId
+        .replace(/([A-Z])/g, ' $1')
+        .replace(/-/g, ' ')
+        .trim();
+      lines.push(` * ${readableOpId}`);
+    }
+
+    // Description
+    if (operation.description) {
+      lines.push(` *`);
+      const descLines = operation.description.split('\n').map(l => ` * ${l.trim()}`);
+      lines.push(...descLines);
+    }
+
+    // Parameters
+    if (params.length > 0) {
+      lines.push(` *`);
+      for (const param of params) {
+        const paramName = param.split(':')[0].trim();
+        const paramType = param.split(':')[1]?.trim() || 'any';
+        lines.push(` * @param ${paramName} - ${paramType}`);
+      }
+    }
+
+    // Returns
+    lines.push(` * @returns Promise<${responseTypeName}>`);
+
+    // Method and path info
+    lines.push(` * @method ${method.toUpperCase()} ${path}`);
+
+    // Build JSDoc comment
+    if (lines.length === 0) {
+      return '';
+    }
+
+    return `/**
+${lines.join('\n')}
+ */
+`;
   }
 }
