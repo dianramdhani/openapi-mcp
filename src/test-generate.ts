@@ -35,21 +35,26 @@ try {
 
   const typesFiles: string[] = [];
   const servicesFiles: string[] = [];
+  const spec = parser.getSpec();
+
+  console.log(`\n=== Processing ${tags.length} tag(s) ===`);
 
   for (const tagName of tags) {
     const schemaNames = Array.from(parser.getSchemaNamesByTag(tagName));
     const operations = parser.getOperationsByTag(tagName);
 
-    if (operations.length === 0) continue;
+    if (operations.length === 0) {
+      console.log(`⊘ Skipping ${tagName} (no operations)`);
+      continue;
+    }
 
     // Remove '-controller' suffix for feature name
     const featureName = tagName.replace(/-controller$/i, '').toLowerCase();
     
-    console.log(`\n=== Processing: ${tagName} -> ${featureName} ===`);
+    console.log(`\nProcessing: ${tagName} -> ${featureName}`);
     console.log(`  Schemas: ${schemaNames.length}`);
     console.log(`  Operations: ${operations.length}`);
 
-    const spec = parser.getSpec();
     const typeGenerator = new TypeScriptTypeGenerator(spec);
     
     // Generate schema types
@@ -93,18 +98,30 @@ try {
     console.log(`  ✓ ${servicesPath}`);
   }
 
+  // Generate common.types.ts for shared types (duplicates that were kept)
+  console.log('\n=== Generating common.types.ts ===');
+  const commonTypes = outputManager.generateCommonTypes();
+  if (commonTypes) {
+    const commonTypesPath = `${config.typesOutputDir}/common.types.ts`;
+    outputManager.writeFile(commonTypesPath, commonTypes);
+    console.log(`  ✓ ${commonTypesPath}`);
+    typesFiles.unshift('common.types.ts'); // Add common.types first
+  } else {
+    console.log('  ⊘ No common types to generate');
+  }
+
   // Generate index.ts files
   console.log('\n=== Generating index.ts files ===');
-  
+
   const typesIndexPath = `${config.typesOutputDir}/index.ts`;
   const servicesIndexPath = `${config.servicesOutputDir}/index.ts`;
-  
+
   const typesIndex = outputManager.generateTypesIndex(typesFiles);
   const servicesIndex = outputManager.generateServicesIndex(servicesFiles);
-  
+
   outputManager.writeFile(typesIndexPath, typesIndex);
   outputManager.writeFile(servicesIndexPath, servicesIndex);
-  
+
   console.log(`  ✓ ${typesIndexPath}`);
   console.log(`  ✓ ${servicesIndexPath}`);
 

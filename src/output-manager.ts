@@ -170,6 +170,36 @@ export class OutputManager {
   }
 
   /**
+   * Generate common.types.ts for shared types
+   */
+  generateCommonTypes(): string | null {
+    if (this.duplicates.length === 0) {
+      return null;
+    }
+
+    const commonTypes: string[] = [];
+    
+    for (const dup of this.duplicates) {
+      // Get the type definition from the source file
+      const sourceFeature = dup.resolvedFile;
+      // The type is already defined in the source file, we just need to re-export it
+      commonTypes.push(dup.typeName);
+    }
+
+    if (commonTypes.length === 0) {
+      return null;
+    }
+
+    // Create re-exports from the first file that defines them
+    const firstSource = this.duplicates[0].resolvedFile;
+    const exports = commonTypes
+      .map((type) => `export type { ${type} } from './${firstSource}.types';`)
+      .join('\n');
+
+    return `// Auto-generated common types\n// These types are shared across multiple features\n\n${exports}\n`;
+  }
+
+  /**
    * Add imports for types that are referenced but not defined in this file
    */
   addMissingImports(featureName: string, content: string): string {
