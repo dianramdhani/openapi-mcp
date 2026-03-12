@@ -1,6 +1,7 @@
 import { OpenAPIParser } from './parser.js';
 import { TypeScriptTypeGenerator } from './type-generator.js';
 import { ServiceGenerator } from './service-generator.js';
+import { MockGenerator } from './mock-generator.js';
 import { OutputManager } from './output-manager.js';
 import { writeFileSync, mkdirSync } from 'fs';
 import { spawn } from 'child_process';
@@ -24,20 +25,25 @@ try {
   // Get output directories (uses config if exists, otherwise default)
   const typesOutputDir = outputManager.getTypesOutputDir();
   const servicesOutputDir = outputManager.getServicesOutputDir();
+  const mocksOutputDir = outputManager.getMocksOutputDir();
+  const handlersOutputDir = `${mocksOutputDir}/handlers`;
 
   console.log(`\nOutput directories:`);
   console.log(`  Types: ${typesOutputDir}`);
   console.log(`  Services: ${servicesOutputDir}`);
+  console.log(`  Mocks/Handlers: ${handlersOutputDir}`);
   
   // Create output directories
   mkdirSync(typesOutputDir, { recursive: true });
   mkdirSync(servicesOutputDir, { recursive: true });
+  mkdirSync(handlersOutputDir, { recursive: true });
 
   // Get all tags or filter by tag
   const tags = testTag ? [testTag] : parser.getAllTags().map((t) => t.name);
 
   const typesFiles: string[] = [];
   const servicesFiles: string[] = [];
+  const mockFiles: string[] = [];
   const spec = parser.getSpec();
 
   console.log(`\n=== Processing ${tags.length} tag(s) ===`);
@@ -84,21 +90,29 @@ try {
     const serviceGenerator = new ServiceGenerator();
     const services = serviceGenerator.generateService(tagName, operations);
 
+    // Generate mocks
+    const mockGenerator = new MockGenerator(spec);
+    const handlers = mockGenerator.generateMockHandlers(tagName, operations);
+
     // Write files
     const typesPath = `${typesOutputDir}/${featureName}.types.ts`;
     const servicesPath = `${servicesOutputDir}/${featureName}.services.ts`;
+    const mockPath = `${handlersOutputDir}/${featureName}.ts`;
 
     // Add missing imports for referenced types
     const typesWithImports = outputManager.addMissingImports(featureName, deduplicatedTypes);
 
     outputManager.writeFile(typesPath, typesWithImports);
     outputManager.writeFile(servicesPath, services);
+    outputManager.writeFile(mockPath, handlers);
 
     typesFiles.push(`${featureName}.types.ts`);
     servicesFiles.push(`${featureName}.services.ts`);
+    mockFiles.push(`${featureName}.ts`);
 
     console.log(`  ✓ ${typesPath}`);
     console.log(`  ✓ ${servicesPath}`);
+    console.log(`  ✓ ${mockPath}`);
   }
 
   // Generate common.types.ts for shared types (duplicates that were kept)
@@ -118,15 +132,19 @@ try {
 
   const typesIndexPath = `${typesOutputDir}/index.ts`;
   const servicesIndexPath = `${servicesOutputDir}/index.ts`;
+  const mocksIndexPath = `${handlersOutputDir}/index.ts`;
 
   const typesIndex = outputManager.generateTypesIndex(typesFiles);
   const servicesIndex = outputManager.generateServicesIndex(servicesFiles);
+  const mocksIndex = outputManager.generateMocksIndex(mockFiles);
 
   outputManager.writeFile(typesIndexPath, typesIndex);
   outputManager.writeFile(servicesIndexPath, servicesIndex);
+  outputManager.writeFile(mocksIndexPath, mocksIndex);
 
   console.log(`  ✓ ${typesIndexPath}`);
   console.log(`  ✓ ${servicesIndexPath}`);
+  console.log(`  ✓ ${mocksIndexPath}`);
 
   // Report duplicates
   console.log('\n=== Duplicate Types Report ===');

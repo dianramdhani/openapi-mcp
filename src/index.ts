@@ -9,6 +9,7 @@ import {
 import { OpenAPIParser } from './parser.js';
 import { TypeScriptTypeGenerator } from './type-generator.js';
 import { ServiceGenerator } from './service-generator.js';
+import { MockGenerator } from './mock-generator.js';
 import { OutputManager } from './output-manager.js';
 
 const server = new Server(
@@ -82,6 +83,29 @@ const tools = [
   {
     name: 'generate-with-config',
     description: 'Generate TypeScript types and services using config file, with index.ts exports and duplicate type handling',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        specPath: {
+          type: 'string',
+          description: 'Path to the OpenAPI spec JSON file',
+        },
+        configPath: {
+          type: 'string',
+          description: 'Path to openapi-mcp.config.json',
+          default: './openapi-mcp.config.json',
+        },
+        tag: {
+          type: 'string',
+          description: 'Tag to filter operations (optional, generates all if not specified)',
+        },
+      },
+      required: ['specPath'],
+    },
+  },
+  {
+    name: 'generate-mocks',
+    description: 'Generate MSW mock handlers from an OpenAPI spec for a specific tag',
     inputSchema: {
       type: 'object',
       properties: {
@@ -240,12 +264,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         // Get output directories (uses config if exists, otherwise default)
         const typesOutputDir = outputManager.getTypesOutputDir();
         const servicesOutputDir = outputManager.getServicesOutputDir();
+        const mocksOutputDir = outputManager.getMocksOutputDir();
+        const handlersOutputDir = `${mocksOutputDir}/handlers`;
+        const hasMocksConfig = outputManager.getConfig()?.mocksOutputDir !== undefined;
 
         const tagsToGenerate = tag ? [tag] : parser.getAllTags().map((t) => t.name);
 
         const typesFiles: string[] = [];
         const servicesFiles: string[] = [];
+        const mockFiles: string[] = [];
         const output: string[] = [];
+        const mockGenerator = new MockGenerator(spec);
 
         for (const tagName of tagsToGenerate) {
           const schemaNames = Array.from(parser.getSchemaNamesByTag(tagName));
@@ -281,6 +310,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           outputManager.writeFile(typesPath, deduplicatedTypes);
           outputManager.writeFile(servicesPath, services);
 
+          if (hasMocksConfig) {
+            const handlers = mockGenerator.generateMockHandlers(tagName, operations);
+            const mockPath = `${handlersOutputDir}/${featureName}.ts`;
+            outputManager.writeFile(mockPath, handlers);
+            mockFiles.push(`${featureName}.ts`);
+          }
+
           typesFiles.push(`${featureName}.types.ts`);
           servicesFiles.push(`${featureName}.services.ts`);
         }
@@ -295,12 +331,82 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         outputManager.writeFile(typesIndexPath, typesIndex);
         outputManager.writeFile(servicesIndexPath, servicesIndex);
 
+        if (hasMocksConfig && mockFiles.length > 0) {
+          const mocksIndex = outputManager.generateMocksIndex(mockFiles);
+          const mocksIndexPath = `${handlersOutputDir}/index.ts`;
+          outputManager.writeFile(mocksIndexPath, mocksIndex);
+        }
+
         output.push(
           `✓ Generated ${typesFiles.length} types files in ${typesOutputDir}`,
-          `✓ Generated ${servicesFiles.length} services files in ${servicesOutputDir}`,
+          `✓ Generated ${servicesFiles.length} services files in ${servicesOutputDir}`
+        );
+
+        if (hasMocksConfig) {
+          output.push(`✓ Generated ${mockFiles.length} mock files in ${handlersOutputDir}`);
+        }
+
+        output.push(
           `✓ Generated index.ts files`,
           '',
           outputManager.getDuplicatesReport()
+        );
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: output.join('\n'),
+            },
+          ],
+        };
+      }
+
+      case 'generate-mocks': {
+        const { specPath, configPath, tag } = args as {
+          specPath: string;
+          configPath?: string;
+          tag?: string;
+        };
+
+        const parser = new OpenAPIParser(specPath);
+        const spec = parser.getSpec();
+        const outputManager = new OutputManager(configPath || './openapi-mcp.config.json');
+        
+        const mocksOutputDir = outputManager.getMocksOutputDir();
+        const handlersOutputDir = `${mocksOutputDir}/handlers`;
+
+        const tagsToGenerate = tag ? [tag] : parser.getAllTags().map((t) => t.name);
+
+        const mockFiles: string[] = [];
+        const output: string[] = [];
+
+        for (const tagName of tagsToGenerate) {
+          const operations = parser.getOperationsByTag(tagName);
+
+          if (operations.length === 0) continue;
+
+          const featureName = tagName.replace(/-controller$/i, '').toLowerCase();
+
+          const mockGenerator = new MockGenerator(spec);
+          const handlers = mockGenerator.generateMockHandlers(tagName, operations);
+
+          const mockPath = `${handlersOutputDir}/${featureName}.ts`;
+          outputManager.writeFile(mockPath, handlers);
+
+          mockFiles.push(`${featureName}.ts`);
+        }
+
+        // Generate index.ts for handlers
+        if (mockFiles.length > 0) {
+          const mocksIndex = outputManager.generateMocksIndex(mockFiles);
+          const mocksIndexPath = `${handlersOutputDir}/index.ts`;
+          outputManager.writeFile(mocksIndexPath, mocksIndex);
+        }
+
+        output.push(
+          `✓ Generated ${mockFiles.length} mock files in ${handlersOutputDir}`,
+          `✓ Generated handlers/index.ts`
         );
 
         return {

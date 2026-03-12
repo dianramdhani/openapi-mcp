@@ -4,6 +4,7 @@ import { dirname, resolve, join } from 'path';
 export interface OpenApiMcpConfig {
   typesOutputDir: string;
   servicesOutputDir: string;
+  mocksOutputDir?: string;
 }
 
 export interface DuplicateTypeInfo {
@@ -33,6 +34,9 @@ export class OutputManager {
       }
       if (this.config && !this.config.servicesOutputDir.startsWith('/')) {
         this.config.servicesOutputDir = resolve(this.configDir, this.config.servicesOutputDir);
+      }
+      if (this.config && this.config.mocksOutputDir && !this.config.mocksOutputDir.startsWith('/')) {
+        this.config.mocksOutputDir = resolve(this.configDir, this.config.mocksOutputDir);
       }
     } else {
       // No config file - use feature-based structure (types/ and services/ in current dir)
@@ -65,6 +69,17 @@ export class OutputManager {
       return this.config.servicesOutputDir;
     }
     return resolve(this.configDir, 'services');
+  }
+
+  /**
+   * Get output directory for mocks
+   * If no config, returns default mocks/ directory
+   */
+  getMocksOutputDir(): string {
+    if (this.config && this.config.mocksOutputDir) {
+      return this.config.mocksOutputDir;
+    }
+    return resolve(this.configDir, 'mocks');
   }
 
   /**
@@ -179,6 +194,34 @@ export class OutputManager {
       .join('\n');
 
     return `// Auto-generated services index\n${exports}\n`;
+  }
+
+  /**
+   * Generate index.ts for mocks/handlers directory
+   */
+  generateMocksIndex(files: string[]): string {
+    const imports = files
+      .map((file) => {
+        const basename = file.replace('.ts', '');
+        const varName = basename + 'Handlers';
+        return `import { ${varName} } from './${basename}';`;
+      })
+      .join('\n');
+
+    const combined = files
+      .map((file) => {
+        const basename = file.replace('.ts', '');
+        return `...${basename}Handlers`;
+      })
+      .join(',\n  ');
+
+    return `// Auto-generated mocks index
+${imports}
+
+export const handlers = [
+  ${combined}
+];
+`;
   }
 
   /**
