@@ -24,28 +24,36 @@ flowchart TB
         C[parser.ts<br/>OpenAPI Parser]
         D[type-generator.ts<br/>Type Generator]
         E[service-generator.ts<br/>Service Generator]
-        F[output-manager.ts<br/>Output Manager]
+        F[mock-generator.ts<br/>Mock Generator]
+        G[output-manager.ts<br/>Output Manager]
     end
 
     subgraph Output["Generated Output"]
-        G1[types/index.ts]
-        G2[types/*.types.ts]
-        H1[services/index.ts]
-        H2[services/*.services.ts]
+        H1[types/index.ts]
+        H2[types/*.types.ts]
+        I1[services/index.ts]
+        I2[services/*.services.ts]
+        J1[mocks/handlers/index.ts]
+        J2[mocks/handlers/*.ts]
     end
 
     A -->|stdio transport| B
     B --> C
     B --> D
     B --> E
+    B --> F
     C -->|schema data| D
     C -->|operations| E
-    D -->|types| F
-    E -->|services| F
-    F -->|write files| G1
-    F -->|write files| G2
-    F -->|write files| H1
-    F -->|write files| H2
+    C -->|operations| F
+    D -->|types| G
+    E -->|services| G
+    F -->|mocks| G
+    G -->|write files| H1
+    G -->|write files| H2
+    G -->|write files| I1
+    G -->|write files| I2
+    G -->|write files| J1
+    G -->|write files| J2
 ```
 
 ### Component Interaction
@@ -57,6 +65,7 @@ sequenceDiagram
     participant Parser as parser.ts
     participant TypeGen as type-generator.ts
     participant SvcGen as service-generator.ts
+    participant MockGen as mock-generator.ts
     participant Output as output-manager.ts
 
     Client->>Index: generate-with-config
@@ -77,12 +86,17 @@ sequenceDiagram
         Index->>SvcGen: generateService
         SvcGen-->>Index: services content
         
+        Index->>MockGen: generateMockHandlers
+        MockGen-->>Index: mocks content
+        
         Index->>Output: writeFile types
         Index->>Output: writeFile services
+        Index->>Output: writeFile mocks
     end
     
     Index->>Output: generateTypesIndex
     Index->>Output: generateServicesIndex
+    Index->>Output: generateMocksIndex
     Index->>Output: write index files
     Output-->>Client: summary report
 ```
@@ -95,7 +109,7 @@ sequenceDiagram
 
 **Key Functions**:
 - Initializes MCP server with `@modelcontextprotocol/sdk`
-- Registers 4 tools: `list-tags`, `find-tag-by-path`, `generate-typescript`, `generate-with-config`
+- Registers 5 tools: `list-tags`, `find-tag-by-path`, `generate-typescript`, `generate-with-config`, `generate-mocks`
 - Routes tool calls to appropriate handlers
 - Manages stdio transport for MCP communication
 
@@ -106,7 +120,8 @@ sequenceDiagram
 | `list-tags` | List all tags with endpoint counts | `specPath` | Tags array with counts |
 | `find-tag-by-path` | Find tags by URL path pattern | `specPath`, `pathQuery` | Path matches |
 | `generate-typescript` | Generate TS types & services (simple) | `specPath`, `tag`, `forceRequired` | File contents |
-| `generate-with-config` ⭐ | Generate with config, dedup, auto-imports | `specPath`, `configPath`, `tag` | File system output |
+| `generate-with-config` ⭐ | Generate types, services & mocks with config | `specPath`, `configPath`, `tag` | File system output |
+| `generate-mocks` | Generate MSW mock handlers | `specPath`, `configPath`, `tag` | File system output |
 
 ### 2. OpenAPI Parser (`src/parser.ts`)
 
@@ -233,20 +248,44 @@ export const Reporting = {
 };
 ```
 
-### 5. Output Manager (`src/output-manager.ts`)
+### 5. Mock Generator (`src/mock-generator.ts`)
+
+**Responsibility**: Generate MSW (Mock Service Worker) handlers with realistic mock data based on schemas.
+
+**Key Methods**:
+
+```typescript
+class MockGenerator {
+  constructor(spec: OpenAPISpec)
+  
+  // Generate MSW handlers for a tag
+  generateMockHandlers(tagName: string, operations: Operation[]): string
+  
+  // Internal methods
+  private generateHandler(path: string, method: string, operation: OperationObject): string
+  private generateMockValue(schema: SchemaObject, depth: number): any
+  private resolveRef(ref: string): SchemaObject | undefined
+}
+```
+
+**Features**:
+- Converts OpenAPI paths (`{id}`) to MSW paths (`:id`)
+- Generates mock data recursively from response schemas
+- Handles `enum`, `oneOf`, `anyOf`, and `allOf`
+- Auto-imports `http` and `HttpResponse` from `msw`
+
+### 6. Output Manager (`src/output-manager.ts`)
 
 **Responsibility**: Manage file output, handle duplicate types, and generate index files.
 
 **Key Methods**:
 
 ```typescript
-class OutputManager {
-  constructor(configPath: string)
-  
   // Configuration
   getConfig(): OpenApiMcpConfig | null
   getTypesOutputDir(): string
   getServicesOutputDir(): string
+  getMocksOutputDir(): string
   
   // Type management
   registerTypes(featureName: string, typesContent: string): string
@@ -256,6 +295,7 @@ class OutputManager {
   writeFile(filePath: string, content: string): void
   generateTypesIndex(files: string[]): string
   generateServicesIndex(files: string[]): string
+  generateMocksIndex(files: string[]): string
   
   // Reporting
   getDuplicatesReport(): string
@@ -324,11 +364,12 @@ flowchart TD
     G --> H[Generate types]
     H --> I[Register types with dedup]
     I --> J[Generate services]
-    J --> K{More tags?}
-    K -->|Yes| E
-    K -->|No| L[Write files to disk]
-    L --> M[Generate index.ts files]
-    M --> N[Return summary report]
+    J --> K[Generate mocks (if configured)]
+    K --> L{More tags?}
+    L -->|Yes| E
+    L -->|No| M[Write files to disk]
+    M --> N[Generate index.ts files]
+    N --> O[Return summary report]
 ```
 
 ## Configuration
@@ -338,7 +379,8 @@ flowchart TD
 ```json
 {
   "typesOutputDir": "./src/types",
-  "servicesOutputDir": "./src/services"
+  "servicesOutputDir": "./src/services",
+  "mocksOutputDir": "./src/mocks"
 }
 ```
 
@@ -349,6 +391,7 @@ flowchart TD
 **Default (no config)**:
 - Types: `./types/`
 - Services: `./services/`
+- Mocks: `./mocks/`
 
 ## Generated Output Structure
 
@@ -372,8 +415,16 @@ graph TD
         Svc3[reporting.services.ts]
     end
 
+    subgraph Mocks["mocks/handlers/"]
+        MockIndex[index.ts]
+        Mock1[dashboard-device-performance.ts]
+        Mock2[dashboard-device-with-issue.ts]
+        Mock3[reporting.ts]
+    end
+
     Config -.->|configures| Types
     Config -.->|configures| Services
+    Config -.->|configures| Mocks
     TypesIndex --> Types1
     TypesIndex --> Types2
     TypesIndex --> Types3
@@ -385,6 +436,9 @@ graph TD
     Svc1 -.->|import from| Types1
     Svc2 -.->|import from| Types2
     Svc3 -.->|import from| Types3
+    MockIndex --> Mock1
+    MockIndex --> Mock2
+    MockIndex --> Mock3
 ```
 
 ### Index Files
@@ -403,6 +457,40 @@ export * from './reporting.types';
 export * from './dashboard-device-performance.services';
 export * from './dashboard-device-with-issue.services';
 export * from './reporting.services';
+```
+
+**mocks/handlers/index.ts**:
+```typescript
+// Auto-generated mocks index
+import { dashboardDevicePerformanceHandlers } from './dashboard-device-performance';
+import { dashboardDeviceWithIssueHandlers } from './dashboard-device-with-issue';
+import { reportingHandlers } from './reporting';
+
+export const handlers = [
+  ...dashboardDevicePerformanceHandlers,
+  ...dashboardDeviceWithIssueHandlers,
+  ...reportingHandlers
+];
+```
+
+## Mock Generation
+
+### Mock Handler Pattern
+
+```typescript
+import { http, HttpResponse } from 'msw';
+
+export const reportingHandlers = [
+  // Get SLA Customers
+  http.get('*/v1/reporting/sla-customers', () => {
+    return HttpResponse.json([
+      {
+        customerName: "mock-string",
+        slaValue: 123
+      }
+    ]);
+  })
+];
 ```
 
 ## Class Diagram
@@ -428,7 +516,7 @@ classDiagram
         +generateOperationTypes(operationId: string, operation: OperationObject) TypesResult
         +getOperationTypeNames(operationId: string) TypeNames
         -getTsType(schema: SchemaObject, context: string[]) string
-        -topologicalSort(schemaNames: string[], schemas: Record) string[]
+        -topologicalSort(schemaNames: string[], schemas: Record) string
     }
 
     class ServiceGenerator {
@@ -439,6 +527,14 @@ classDiagram
         -generateJSDoc(operation, path, method, params, responseType) string
     }
 
+    class MockGenerator {
+        -spec: OpenAPISpec
+        +generateMockHandlers(tagName: string, operations: Operation[]) string
+        -tagToHandlersName(tagName: string) string
+        -generateHandler(path: string, method: string, operation: OperationObject) string
+        -generateMockValue(schema: SchemaObject, depth: number) any
+    }
+
     class OutputManager {
         -config: OpenApiMcpConfig
         -definedTypes: Map~string, string~
@@ -447,13 +543,16 @@ classDiagram
         +writeFile(filePath: string, content: string) void
         +generateTypesIndex(files: string[]) string
         +generateServicesIndex(files: string[]) string
+        +generateMocksIndex(files: string[]) string
         +getDuplicatesReport() string
+        +getMocksOutputDir() string
         +addMissingImports(featureName: string, content: string) string
     }
 
     OpenAPIParser --> OpenAPISpec : parses
     TypeScriptTypeGenerator --> OpenAPISpec : uses
     ServiceGenerator --> Operation : uses
+    MockGenerator --> Operation : uses
     OutputManager --> DuplicateTypeInfo : tracks
 ```
 
@@ -531,20 +630,20 @@ try {
 
 ```bash
 # Full test with TypeScript validation
-npm run test
+yarn test
 
 # Test with explicit TypeScript check
-npm run test:tsc
+yarn test:tsc
 
 # Test without TypeScript validation
-npm run test:skip-tsc
+yarn test:skip-tsc
 ```
 
 ### Test Flow
 
 ```mermaid
 flowchart LR
-    A[npm run test] --> B[npm run build]
+    A[yarn test] --> B[yarn build]
     B --> C[tsc compilation]
     C --> D{Build success?}
     D -->|No| E[Show errors]
@@ -579,7 +678,7 @@ flowchart LR
 
 ```bash
 # Compile TypeScript
-npm run build
+yarn build
 
 # Output: dist/
 # - index.js
@@ -651,4 +750,4 @@ For issues or questions:
 1. Check README.md for usage examples
 2. Review generated output in `types/` and `services/` directories
 3. Enable verbose logging in MCP client
-4. Test with `npm run test` to verify setup
+4. Test with `yarn test` to verify setup

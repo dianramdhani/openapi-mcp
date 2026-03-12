@@ -8,16 +8,50 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "node --loader ts-node/esm src/index.ts",
-    "test": "npm run build && node dist/test-generate.js ../report.json",
-    "test:tsc": "npm run build && node dist/test-generate.js ../report.json && npx tsc -p tsconfig.test.json --noEmit",
-    "test:skip-tsc": "npm run build && node dist/test-generate.js ../report.json --skip-tsc"
+    "test": "yarn build && node dist/test-generate.js ../report.json",
+    "test:tsc": "yarn build && node dist/test-generate.js ../report.json && yarn tsc -p tsconfig.test.json --noEmit",
+    "test:skip-tsc": "yarn build && node dist/test-generate.js ../report.json --skip-tsc",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "commit": "cz",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "src/**/*.ts": [
+      "eslint --fix"
+    ]
+  },
+  "config": {
+    "commitizen": {
+      "path": "cz-conventional-changelog"
+    }
   },
   "keywords": ["mcp", "openapi", "typescript", "codegen"],
-  "author": "",
+  "author": "Dian Ramdhani Lubis",
   "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dianramdhani/openapi-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dianramdhani/openapi-mcp/issues"
+  },
+  "homepage": "https://github.com/dianramdhani/openapi-mcp#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@types/node": "^25.4.0",
     "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.7.1",
+    "@commitlint/config-conventional": "^19.7.1",
+    "@typescript-eslint/eslint-plugin": "^8.24.1",
+    "@typescript-eslint/parser": "^8.24.1",
+    "commitizen": "^4.3.1",
+    "cz-conventional-changelog": "^3.3.0",
+    "eslint": "^9.21.0",
+    "eslint-plugin-simple-import-sort": "^12.1.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.4.3"
   }
 }
