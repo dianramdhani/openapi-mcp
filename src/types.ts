@@ -53,6 +53,8 @@ export interface RequestBodyObject {
 
 export interface MediaTypeObject {
   schema?: SchemaObject;
+  example?: any;
+  examples?: Record<string, any>;
 }
 
 export interface ResponseObject {
@@ -73,6 +75,8 @@ export interface SchemaObject {
   oneOf?: SchemaObject[];
   anyOf?: SchemaObject[];
   allOf?: SchemaObject[];
+  example?: any;
+  default?: any;
 }
 
 export interface TagInfo {

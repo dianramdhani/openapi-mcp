@@ -1,4 +1,4 @@
-import { OperationObject, SchemaObject, OpenAPISpec } from './types.js';
+import { OpenAPISpec,OperationObject, SchemaObject } from './types.js';
 
 export class MockGenerator {
   private spec: OpenAPISpec;
@@ -56,20 +56,43 @@ ${handlers.join(',\n\n')}
     const fullPath = `*/${mswPath.startsWith('/') ? mswPath.slice(1) : mswPath}`;
     
     // Get response schema for 200 or 201
-    const response200 = operation.responses['200'];
-    const response201 = operation.responses['201'];
-    const response = response200 || response201;
+    const response200 = operation.responses['200'] || operation.responses[200];
+    const response201 = operation.responses['201'] || operation.responses[201];
+    const response204 = operation.responses['204'] || operation.responses[204];
+    const responseDefault = operation.responses['default'];
+    const response = response200 || response201 || response204 || responseDefault;
     
-    let mockData: any = { message: 'Success' };
-    
-    if (response?.content?.['application/json']?.schema) {
-      mockData = this.generateMockValue(response.content['application/json'].schema);
-    } else if (response?.content?.['*/*']?.schema) {
-      mockData = this.generateMockValue(response.content['*/*'].schema);
-    }
-
     const summary = operation.summary || operation.operationId;
     
+    // Determine the status code from the response definition (default to 200 if not clear)
+    let statusCode = 200;
+    if (response201) statusCode = 201;
+    if (response204) statusCode = 204;
+
+    // Cases with strictly no content
+    if (statusCode === 204 || (response && !response.content)) {
+      return `  // ${summary}
+  http.${method.toLowerCase()}('${fullPath}', () => {
+    return new HttpResponse(null, { status: ${statusCode} });
+  })`;
+    }
+
+    let mockData: any = {};
+    
+    if (response?.content) {
+      const mediaType = response.content['application/json'] || response.content['*/*'] || Object.values(response.content)[0];
+      if (mediaType) {
+        if (mediaType.example !== undefined) {
+          mockData = mediaType.example;
+        } else if (mediaType.examples && Object.keys(mediaType.examples).length > 0) {
+          const firstExample = Object.values(mediaType.examples)[0] as any;
+          mockData = firstExample.value !== undefined ? firstExample.value : firstExample;
+        } else if (mediaType.schema) {
+          mockData = this.generateMockValue(mediaType.schema);
+        }
+      }
+    }
+
     return `  // ${summary}
   http.${method.toLowerCase()}('${fullPath}', () => {
     return HttpResponse.json(${JSON.stringify(mockData, null, 4).replace(/\n/g, '\n    ')});
@@ -93,14 +116,34 @@ ${handlers.join(',\n\n')}
       return resolved ? this.generateMockValue(resolved, depth + 1) : {};
     }
 
+    // Use example or default if available
+    if (schema.example !== undefined) return schema.example;
+    if (schema.default !== undefined) return schema.default;
+
     if (schema.enum && schema.enum.length > 0) {
       return schema.enum[0];
     }
+
+    // Handle allOf (merged properties)
+    if (schema.allOf && schema.allOf.length > 0) {
+        const combined: any = {};
+        for (const s of schema.allOf) {
+            const val = this.generateMockValue(s, depth + 1);
+            if (typeof val === 'object' && val !== null) Object.assign(combined, val);
+        }
+        return combined;
+    }
+
+    // Handle oneOf/anyOf (pick first)
+    if (schema.oneOf && schema.oneOf.length > 0) return this.generateMockValue(schema.oneOf[0], depth + 1);
+    if (schema.anyOf && schema.anyOf.length > 0) return this.generateMockValue(schema.anyOf[0], depth + 1);
 
     switch (schema.type) {
       case 'string':
         if (schema.format === 'date-time') return new Date().toISOString();
         if (schema.format === 'date') return new Date().toISOString().split('T')[0];
+        if (schema.format === 'email') return 'user@example.com';
+        if (schema.format === 'uuid') return '00000000-0000-0000-0000-000000000000';
         return 'mock-string';
       case 'number':
       case 'integer':
@@ -110,24 +153,21 @@ ${handlers.join(',\n\n')}
       case 'array':
         return [this.generateMockValue(schema.items || {}, depth + 1)];
       case 'object':
-        const obj: any = {};
-        if (schema.properties) {
-          for (const [propName, propSchema] of Object.entries(schema.properties)) {
-            obj[propName] = this.generateMockValue(propSchema, depth + 1);
-          }
-        }
-        return obj;
       default:
-        // Try to handle oneOf, anyOf, allOf if needed
-        if (schema.oneOf && schema.oneOf.length > 0) return this.generateMockValue(schema.oneOf[0], depth + 1);
-        if (schema.anyOf && schema.anyOf.length > 0) return this.generateMockValue(schema.anyOf[0], depth + 1);
-        if (schema.allOf && schema.allOf.length > 0) {
-            const combined: any = {};
-            for (const s of schema.allOf) {
-                const val = this.generateMockValue(s, depth + 1);
-                if (typeof val === 'object') Object.assign(combined, val);
+        // Try to handle as object even if type is missing but properties exist
+        if (schema.properties || schema.additionalProperties || schema.type === 'object') {
+          const obj: any = {};
+          if (schema.properties) {
+            for (const [propName, propSchema] of Object.entries(schema.properties)) {
+              obj[propName] = this.generateMockValue(propSchema, depth + 1);
             }
-            return combined;
+          }
+          // If no properties but additionalProperties exist, add one sample entry
+          if (Object.keys(obj).length === 0 && schema.additionalProperties) {
+            const propSchema = typeof schema.additionalProperties === 'boolean' ? {} : schema.additionalProperties;
+            obj['exampleKey'] = this.generateMockValue(propSchema, depth + 1);
+          }
+          return obj;
         }
         return {};
     }

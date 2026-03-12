@@ -273,8 +273,10 @@ class MockGenerator {
 
 **Features**:
 - Converts OpenAPI paths (`{id}`) to MSW paths (`:id`)
-- Generates mock data recursively from response schemas
-- Handles `enum`, `oneOf`, `anyOf`, and `allOf`
+- Generates mock data recursively from response schemas OR uses defined `example`/`examples`/`default` values
+- Supports multiple response codes including 200, 201, 204 (No Content), and `default`
+- Handles complex schema compositions: `enum`, `oneOf`, `anyOf`, and `allOf`
+- Generates format-specific mock data (e.g., `email`, `uuid`, `date-time`)
 - Auto-imports `http` and `HttpResponse` from `msw`
 
 ### 6. Output Manager (`src/output-manager.ts`)

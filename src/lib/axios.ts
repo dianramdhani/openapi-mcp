@@ -8,19 +8,19 @@ export interface HttpResponse<T> {
 }
 
 export const axiosInstance = {
-  async get<T>(url: string, config?: any): Promise<HttpResponse<T>> {
+  async get<T>(_url: string, _config?: unknown): Promise<HttpResponse<T>> {
     return { data: {} as T, status: 200, headers: {} };
   },
-  async post<T>(url: string, data?: any, config?: any): Promise<HttpResponse<T>> {
+  async post<T>(_url: string, _data?: unknown, _config?: unknown): Promise<HttpResponse<T>> {
     return { data: {} as T, status: 200, headers: {} };
   },
-  async put<T>(url: string, data?: any, config?: any): Promise<HttpResponse<T>> {
+  async put<T>(_url: string, _data?: unknown, _config?: unknown): Promise<HttpResponse<T>> {
     return { data: {} as T, status: 200, headers: {} };
   },
-  async patch<T>(url: string, data?: any, config?: any): Promise<HttpResponse<T>> {
+  async patch<T>(_url: string, _data?: unknown, _config?: unknown): Promise<HttpResponse<T>> {
     return { data: {} as T, status: 200, headers: {} };
   },
-  async delete<T>(url: string, config?: any): Promise<HttpResponse<T>> {
+  async delete<T>(_url: string, _config?: unknown): Promise<HttpResponse<T>> {
     return { data: {} as T, status: 200, headers: {} };
   },
 };
