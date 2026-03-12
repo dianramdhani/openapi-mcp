@@ -11,14 +11,16 @@ flowchart LR
     A[OpenAPI Spec] --> B[OpenAPI MCP Server]
     B --> C[Type-Safe TypeScript Code]
     B --> D[Auto-Generated Services]
-    B --> E[Smart Duplicate Handling]
-    B --> F[Ready to Use]
+    B --> E[MSW Mock Handlers]
+    B --> F[Smart Duplicate Handling]
+    B --> G[Ready to Use]
     
     style A fill:#f9f,stroke:#333
     style C fill:#9f9,stroke:#333
     style D fill:#9f9,stroke:#333
     style E fill:#9f9,stroke:#333
     style F fill:#9f9,stroke:#333
+    style G fill:#9f9,stroke:#333
 ```
 
 ### 🚀 Manfaat Utama
@@ -27,6 +29,7 @@ flowchart LR
 |---------|---------|
 | ❌ Manual write types dari OpenAPI | ✅ Auto-generate dalam detik |
 | ❌ Duplicate types di multiple files | ✅ Smart deduplication dengan auto-imports |
+| ❌ Manual mock data creation | ✅ Auto-generated MSW handlers |
 | ❌ Inconsistent naming conventions | ✅ Clean, consistent naming |
 | ❌ No TypeScript validation | ✅ Compiled & validated |
 | ❌ Manual index.ts updates | ✅ Auto-generated exports |
@@ -98,12 +101,14 @@ graph LR
     subgraph Output["Output"]
         E[TypeScript Types]
         F[API Services]
-        G[Auto Index Files]
+        G[MSW Mock Handlers]
+        H[Auto Index Files]
     end
 
     A --> B --> C --> D --> E
     D --> F
     D --> G
+    D --> H
 ```
 
 - **generate-typescript**: Quick generation untuk satu feature
@@ -140,16 +145,19 @@ graph TD
     A --> C[types/*.types.ts]
     A --> D[services/index.ts]
     A --> E[services/*.services.ts]
+    A --> F[mocks/handlers/*.ts]
     
-    B --> F[Clean Exports]
-    C --> G[Type Definitions]
-    D --> H[Service Exports]
-    E --> I[API Methods]
+    B --> G[Clean Exports]
+    C --> H[Type Definitions]
+    D --> I[Service Exports]
+    E --> J[API Methods]
+    F --> K[MSW Handlers]
     
-    style F fill:#9f9,stroke:#333
     style G fill:#9f9,stroke:#333
     style H fill:#9f9,stroke:#333
     style I fill:#9f9,stroke:#333
+    style J fill:#9f9,stroke:#333
+    style K fill:#9f9,stroke:#333
 ```
 
 - ✅ Type-safe dengan TypeScript validation
@@ -157,6 +165,7 @@ graph TD
 - ✅ JSDoc comments untuk IntelliSense
 - ✅ Consistent naming conventions
 - ✅ Axios-based API calls
+- ✅ MSW-based Mock Handlers with realistic data
 
 ## 🎮 Cara Pakai
 
@@ -213,7 +222,7 @@ File `openapi-spec.json` ini adalah sumber truth untuk code generation.
 
 **2. Install dependencies:**
 ```bash
-npm install
+yarn install
 ```
 
 **3. Buat 2 file konfigurasi:**
@@ -222,7 +231,8 @@ a. **openapi-mcp.config.json** - Konfigurasi output directories:
 ```json
 {
   "typesOutputDir": "./src/types",
-  "servicesOutputDir": "./src/services"
+  "servicesOutputDir": "./src/services",
+  "mocksOutputDir": "./src/mocks"
 }
 ```
 
@@ -269,12 +279,24 @@ Input yang MCP butuhkan:
 
 ```
 User: "Generate TypeScript code for reporting feature"
-MCP: [generate-with-config] → Creates types & services files
+MCP: [generate-with-config] → Creates types, services & mock files
 
 Input yang MCP butuhkan:
 - specPath: "/path/to/openapi-spec.json" ⚠️ Required - OpenAPI spec dari Swagger
 - configPath: "./openapi-mcp.config.json" ⚠️ Required - Config output directories
 - tag: "reporting-controller" (Optional - generate all if not specified)
+
+#### Scenario 4: Generate Only Mock Handlers
+
+```
+User: "I need mock handlers for the user-management API"
+MCP: [generate-mocks] → Creates MSW handlers in mocks/handlers directory
+
+Input yang MCP butuhkan:
+- specPath: "/path/to/openapi-spec.json" ⚠️ Required
+- configPath: "./openapi-mcp.config.json" ⚠️ Required
+- tag: "user-controller"
+```
 ```
 
 > ⚠️ **Penting:** Selalu mention **kedua file** (`openapi-spec.json` dan `openapi-mcp.config.json`) di setiap prompt. Jangan skip config file karena MCP server butuh ini untuk menentukan output directories.
@@ -293,7 +315,8 @@ your-project/
 └── your-app/
     ├── src/
     │   ├── types/            ← Generated types
-    │   └── services/         ← Generated services
+    │   ├── services/         ← Generated services
+    │   └── mocks/            ← Generated MSW mocks
     └── package.json
 ```
 
@@ -317,6 +340,7 @@ graph TD
         E[types/*.types.ts]
         F[services/index.ts]
         G[services/*.services.ts]
+        H[mocks/handlers/*.ts]
     end
 
     A --> C
@@ -325,6 +349,7 @@ graph TD
     C --> E
     C --> F
     C --> G
+    C --> H
     
     style A fill:#f9f,stroke:#333
     style B fill:#ff9,stroke:#333
@@ -332,6 +357,7 @@ graph TD
     style E fill:#9f9,stroke:#333
     style F fill:#9f9,stroke:#333
     style G fill:#9f9,stroke:#333
+    style H fill:#9f9,stroke:#333
 ```
 
 ### Contoh Usage di Code Anda
@@ -356,7 +382,7 @@ Test generation dengan TypeScript validation:
 
 ```bash
 # Full test dengan validation
-npm run test
+yarn test
 
 # Test specific feature
 node dist/test-generate.js ../your-spec.json reporting-controller
@@ -372,15 +398,15 @@ Untuk technical details, architecture diagrams, dan development guide, lihat:
 
 ```bash
 # Clone & Install
-git clone <repository>
+git clone https://github.com/dianramdhani/openapi-mcp.git
 cd openapi-mcp
-npm install
+yarn install
 
 # Build
-npm run build
+yarn build
 
 # Test
-npm run test
+yarn test
 
 # Start generating! 🎉
 ```
@@ -393,7 +419,7 @@ npm run test
 
 ## 🤝 Contributing
 
-OpenAPI MCP Server adalah open source. Kontribusi selalu welcome!
+OpenAPI MCP Server adalah open source. Kontribusi selalu welcome! Silakan baca **[CONTRIBUTING.md](./CONTRIBUTING.md)** untuk panduan cara berkontribusi.
 
 ## 📄 License
 

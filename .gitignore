@@ -32,3 +32,6 @@ Thumbs.db
 # Testing
 coverage/
 test*/
+
+# Husky
+.husky/_/
