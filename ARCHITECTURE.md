@@ -281,7 +281,7 @@ class MockGenerator {
 
 ### 6. Output Manager (`src/output-manager.ts`)
 
-**Responsibility**: Manage file output, handle duplicate types, and generate index files.
+**Responsibility**: Manage file output, handle duplicate types, merge existing mock handlers, and generate index files.
 
 **Key Methods**:
 
@@ -293,11 +293,16 @@ class MockGenerator {
   getMocksOutputDir(): string
   
   // Type management
+  seedExistingTypesFromDir(typesDir: string): void
   registerTypes(featureName: string, typesContent: string): string
   addMissingImports(featureName: string, content: string): string
   
+  // File discovery
+  listGeneratedFiles(dirPath: string, suffix?: string, options?: { exclude?: string[] }): string[]
+
   // File operations
   writeFile(filePath: string, content: string): void
+  mergeMockFile(filePath: string, generatedContent: string): string
   generateTypesIndex(files: string[]): string
   generateServicesIndex(files: string[]): string
   generateMocksIndex(files: string[]): string
@@ -362,19 +367,20 @@ export type DashboardDeviceWithIssue = {
 flowchart TD
     A[User calls generate-with-config] --> B[Load config file]
     B --> C[Parse OpenAPI spec]
-    C --> D{Get all tags}
-    D --> E[For each tag]
-    E --> F[Get schema names]
-    F --> G[Get operations]
-    G --> H[Generate types]
-    H --> I[Register types with dedup]
-    I --> J[Generate services]
-    J --> K[Generate mocks (if configured)]
-    K --> L{More tags?}
-    L -->|Yes| E
-    L -->|No| M[Write files to disk]
-    M --> N[Generate index.ts files]
-    N --> O[Return summary report]
+    C --> D[Read existing generated files]
+    D --> E{Get all tags}
+    E --> F[For each tag]
+    F --> G[Get schema names]
+    G --> H[Get operations]
+    H --> I[Generate types]
+    I --> J[Register types with dedup]
+    J --> K[Generate services]
+    K --> L[Generate mocks (if configured)]
+    L --> M{More tags?}
+    M -->|Yes| F
+    M -->|No| N[Write files to disk]
+    N --> O[Generate index.ts files]
+    O --> P[Return summary report]
 ```
 
 ## Configuration

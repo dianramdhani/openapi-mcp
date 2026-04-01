@@ -6,11 +6,12 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { OpenAPIParser } from './parser.js';
-import { TypeScriptTypeGenerator } from './type-generator.js';
-import { ServiceGenerator } from './service-generator.js';
+
 import { MockGenerator } from './mock-generator.js';
 import { OutputManager } from './output-manager.js';
+import { OpenAPIParser } from './parser.js';
+import { ServiceGenerator } from './service-generator.js';
+import { TypeScriptTypeGenerator } from './type-generator.js';
 
 const server = new Server(
   {
@@ -267,12 +268,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const mocksOutputDir = outputManager.getMocksOutputDir();
         const handlersOutputDir = `${mocksOutputDir}/handlers`;
         const hasMocksConfig = outputManager.getConfig()?.mocksOutputDir !== undefined;
+        outputManager.seedExistingTypesFromDir(typesOutputDir);
 
         const tagsToGenerate = tag ? [tag] : parser.getAllTags().map((t) => t.name);
 
-        const typesFiles: string[] = [];
-        const servicesFiles: string[] = [];
-        const mockFiles: string[] = [];
+        const typesFiles = new Set(outputManager.listGeneratedFiles(typesOutputDir, '.types.ts', {
+          exclude: ['index.ts'],
+        }));
+        const servicesFiles = new Set(outputManager.listGeneratedFiles(servicesOutputDir, '.services.ts', {
+          exclude: ['index.ts'],
+        }));
+        const mockFiles = new Set<string>();
+        let generatedTypesCount = 0;
+        let generatedServicesCount = 0;
+        let generatedMockCount = 0;
         const output: string[] = [];
         const mockGenerator = new MockGenerator(spec);
 
@@ -309,21 +318,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
           outputManager.writeFile(typesPath, deduplicatedTypes);
           outputManager.writeFile(servicesPath, services);
+          generatedTypesCount += 1;
+          generatedServicesCount += 1;
 
           if (hasMocksConfig) {
             const handlers = mockGenerator.generateMockHandlers(tagName, operations);
             const mockPath = `${handlersOutputDir}/${featureName}.ts`;
-            outputManager.writeFile(mockPath, handlers);
-            mockFiles.push(`${featureName}.ts`);
+            const mergedHandlers = outputManager.mergeMockFile(mockPath, handlers);
+            outputManager.writeFile(mockPath, mergedHandlers);
+            generatedMockCount += 1;
+            mockFiles.add(`${featureName}.ts`);
           }
 
-          typesFiles.push(`${featureName}.types.ts`);
-          servicesFiles.push(`${featureName}.services.ts`);
+          typesFiles.add(`${featureName}.types.ts`);
+          servicesFiles.add(`${featureName}.services.ts`);
         }
 
         // Generate index.ts files
-        const typesIndex = outputManager.generateTypesIndex(typesFiles);
-        const servicesIndex = outputManager.generateServicesIndex(servicesFiles);
+        const typesIndex = outputManager.generateTypesIndex([...typesFiles].sort());
+        const servicesIndex = outputManager.generateServicesIndex([...servicesFiles].sort());
 
         const typesIndexPath = `${typesOutputDir}/index.ts`;
         const servicesIndexPath = `${servicesOutputDir}/index.ts`;
@@ -331,19 +344,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         outputManager.writeFile(typesIndexPath, typesIndex);
         outputManager.writeFile(servicesIndexPath, servicesIndex);
 
-        if (hasMocksConfig && mockFiles.length > 0) {
-          const mocksIndex = outputManager.generateMocksIndex(mockFiles);
-          const mocksIndexPath = `${handlersOutputDir}/index.ts`;
-          outputManager.writeFile(mocksIndexPath, mocksIndex);
+        if (hasMocksConfig) {
+          const existingMockFiles = outputManager.listGeneratedFiles(handlersOutputDir, '.ts', {
+            exclude: ['index.ts'],
+          });
+          const mergedMockFiles = [...new Set([...existingMockFiles, ...mockFiles])].sort();
+
+          if (mergedMockFiles.length > 0) {
+            const mocksIndex = outputManager.generateMocksIndex(mergedMockFiles);
+            const mocksIndexPath = `${handlersOutputDir}/index.ts`;
+            outputManager.writeFile(mocksIndexPath, mocksIndex);
+          }
         }
 
         output.push(
-          `✓ Generated ${typesFiles.length} types files in ${typesOutputDir}`,
-          `✓ Generated ${servicesFiles.length} services files in ${servicesOutputDir}`
+          `✓ Generated ${generatedTypesCount} types files in ${typesOutputDir}`,
+          `✓ Generated ${generatedServicesCount} services files in ${servicesOutputDir}`
         );
 
         if (hasMocksConfig) {
-          output.push(`✓ Generated ${mockFiles.length} mock files in ${handlersOutputDir}`);
+          output.push(`✓ Generated ${generatedMockCount} mock files in ${handlersOutputDir}`);
         }
 
         output.push(
@@ -375,10 +395,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         
         const mocksOutputDir = outputManager.getMocksOutputDir();
         const handlersOutputDir = `${mocksOutputDir}/handlers`;
+        const existingMockFiles = outputManager.listGeneratedFiles(handlersOutputDir, '.ts', {
+          exclude: ['index.ts'],
+        });
 
         const tagsToGenerate = tag ? [tag] : parser.getAllTags().map((t) => t.name);
 
-        const mockFiles: string[] = [];
+        const mockFiles = new Set(existingMockFiles);
+        let generatedMockCount = 0;
         const output: string[] = [];
 
         for (const tagName of tagsToGenerate) {
@@ -392,20 +416,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           const handlers = mockGenerator.generateMockHandlers(tagName, operations);
 
           const mockPath = `${handlersOutputDir}/${featureName}.ts`;
-          outputManager.writeFile(mockPath, handlers);
+          const mergedHandlers = outputManager.mergeMockFile(mockPath, handlers);
+          outputManager.writeFile(mockPath, mergedHandlers);
+          generatedMockCount += 1;
 
-          mockFiles.push(`${featureName}.ts`);
+          mockFiles.add(`${featureName}.ts`);
         }
 
         // Generate index.ts for handlers
-        if (mockFiles.length > 0) {
-          const mocksIndex = outputManager.generateMocksIndex(mockFiles);
+        if (mockFiles.size > 0) {
+          const mocksIndex = outputManager.generateMocksIndex([...mockFiles].sort());
           const mocksIndexPath = `${handlersOutputDir}/index.ts`;
           outputManager.writeFile(mocksIndexPath, mocksIndex);
         }
 
         output.push(
-          `✓ Generated ${mockFiles.length} mock files in ${handlersOutputDir}`,
+          `✓ Generated ${generatedMockCount} mock files in ${handlersOutputDir}`,
           `✓ Generated handlers/index.ts`
         );
 
